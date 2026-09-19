@@ -4,3 +4,8 @@ __pycache__/
 .env
 node_modules/
 .DS_Store
+
+# personal files (not part of the app)
+Muralidhar_Sanjay_Resume_14-9-26.pdf
+Sanjay_Muralidhar_FuturesFirst_Resume (1).pdf
+YashParikh.pdf
