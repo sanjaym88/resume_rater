@@ -1,0 +1,8 @@
+We are looking for a technically proficient Generative AI Engineer to develop, fine-tune, and deploy large-scale generative models for enterprise applications. You will work with LLMs (e.g., LLaMA, Mistral, GPT) and multimodal models (e.g., Stable Diffusion, CLIP) to build intelligent solutions such as copilots, text/image generators, and RAG pipelines.
+
+Responsibilities include prompt engineering, dataset preprocessing, fine-tuning via LoRA/QLoRA/PEFT techniques, and deploying models with optimized inference using ONNX, vLLM, or TensorRT. Experience with LangChain or LlamaIndex for agentic workflows and integration with vector stores like FAISS, Pinecone, or Weaviate is essential. You should be able to build scalable APIs using FastAPI or Flask, and deploy on cloud or containerized infrastructure (Docker, Kubernetes).
+
+Strong proficiency in Python, PyTorch, and experience working with Transformers (Hugging Face) is required. Familiarity with Groq, Modal, or Replicate for efficient inference is a strong advantage.
+
+You will be expected to stay current with cutting-edge research (e.g., attention mechanisms, retrieval-augmented generation, distillation), and contribute to internal model evaluation, safety, and performance testing frameworks.
+

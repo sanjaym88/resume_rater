@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Resume Rater</title>
+  <style>
+    body {
+      background-color: #1e1e1e;
+      color: white;
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 1rem;
+    }
+
+    h1, h2, label {
+      color: #ffffff;
+    }
+
+    input[type="file"], input[type="text"], button {
+      margin-bottom: 1rem;
+      padding: 0.5rem;
+      background-color: #2e2e2e;
+      color: white;
+      border: 1px solid #444;
+      border-radius: 6px;
+    }
+
+    button {
+      cursor: pointer;
+      background-color: #0078d4;
+      border: none;
+      transition: background-color 0.3s ease;
+    }
+
+    button:hover {
+      background-color: #005fa3;
+    }
+
+    #response, #chatOutput {
+      background-color: #2a2a2a;
+      padding: 1rem;
+      border-radius: 10px;
+      max-height: 300px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      margin-top: 1rem;
+    }
+
+    .message {
+      padding: 0.75rem 1rem;
+      border-radius: 10px;
+      margin: 0.5rem 0;
+      max-width: 80%;
+      word-wrap: break-word;
+    }
+
+    .user-message {
+      background-color: #0078d4;
+      align-self: flex-end;
+      color: white;
+      margin-left: auto;
+    }
+
+    .ai-message {
+      background-color: #121212;
+      color: white;
+      margin-right: auto;
+    }
+
+    #chatOutput {
+      display: flex;
+      flex-direction: column;
+    }
+  </style>
+</head>
+<body>
+  <h1>Resume Rater</h1>
+
+  <form id="uploadForm">
+    <label>Resume PDF:</label>
+    <input type="file" id="resume" name="resume" accept=".pdf" required><br><br>
+
+    <label>Job Description (.txt):</label>
+    <input type="file" id="jd" name="jd" accept=".txt" required><br><br>
+
+    <label>Prompt (.txt):</label>
+    <input type="file" id="prompt" name="prompt" accept=".txt" required><br><br>
+
+    <button type="submit">Rate Resume</button>
+  </form>
+
+  <h2>Score: <span id="scoreDisplay">Awaiting...</span></h2>
+  <pre id="response">Awaiting submission...</pre>
+
+  <form id="chatForm" style="display:none;">
+    <input type="text" id="chatInput" placeholder="Ask a follow-up..." />
+    <button type="submit">Send</button>
+  </form>
+
+  <div id="chatOutput"></div>
+
+  <hr style="margin: 2rem 0; border-color: #444;">
+
+  <h2>Batch Mode (Rank Multiple Resumes)</h2>
+
+  <form id="batchForm">
+    <label>Resumes (select multiple PDFs):</label>
+    <input type="file" id="batchResumes" name="resumes" accept=".pdf" multiple required><br><br>
+
+    <label>Job Description (.txt):</label>
+    <input type="file" id="batchJd" name="jd" accept=".txt" required><br><br>
+
+    <label>Prompt (.txt):</label>
+    <input type="file" id="batchPrompt" name="prompt" accept=".txt" required><br><br>
+
+    <button type="submit">Rank All Resumes</button>
+  </form>
+
+  <div id="batchResults" style="margin-top: 1rem;"></div>
+
+  <div id="batchChatSection" style="display:none; margin-top:1.5rem;">
+    <h3 id="batchChatLabel"></h3>
+    <form id="batchChatForm">
+      <input type="text" id="batchChatInput" placeholder="Ask a follow-up about this candidate..." />
+      <button type="submit">Send</button>
+    </form>
+    <div id="batchChatOutput"></div>
+  </div>
+
+  <script src="script.js" defer></script>
+</body>
+</html>
