@@ -1,3 +1,12 @@
+function getSessionId() {
+  let id = sessionStorage.getItem("resumeRaterSessionId");
+  if (!id) {
+    id = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+    sessionStorage.setItem("resumeRaterSessionId", id);
+  }
+  return id;
+}
+
 document.addEventListener("DOMContentLoaded", function () {
   const responseBox = document.getElementById("response");
   const chatForm = document.getElementById("chatForm");
@@ -11,8 +20,8 @@ document.addEventListener("DOMContentLoaded", function () {
     const formData = new FormData();
     formData.append("resume", document.getElementById("resume").files[0]);
     formData.append("jd", document.getElementById("jd").files[0]);
-    formData.append("prompt", document.getElementById("prompt").files[0]);
-    formData.append("session_id", "default");
+    formData.append("mode", document.getElementById("mode").value);
+    formData.append("session_id", getSessionId());
 
     responseBox.textContent = "Rating in progress...";
     chatOutput.innerHTML = "";
@@ -45,7 +54,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const formData = new FormData();
     formData.append("user_input", msg);
-    formData.append("session_id", "default");
+    formData.append("session_id", getSessionId());
 
     try {
       const res = await fetch("/chat", {
@@ -69,7 +78,7 @@ document.addEventListener("DOMContentLoaded", function () {
       formData.append("resumes", resumeFiles[i]);
     }
     formData.append("jd", document.getElementById("batchJd").files[0]);
-    formData.append("prompt", document.getElementById("batchPrompt").files[0]);
+    formData.append("mode", document.getElementById("batchMode").value);
 
     const batchResults = document.getElementById("batchResults");
     batchResults.textContent = "Ranking resumes...";

@@ -83,8 +83,12 @@
     <label>Job Description (.txt):</label>
     <input type="file" id="jd" name="jd" accept=".txt" required><br><br>
 
-    <label>Prompt (.txt):</label>
-    <input type="file" id="prompt" name="prompt" accept=".txt" required><br><br>
+    <label>Scoring mode:</label>
+    <select id="mode" name="mode">
+      <option value="strict">Strict</option>
+      <option value="standard" selected>Standard</option>
+      <option value="lenient">Lenient</option>
+    </select><br><br>
 
     <button type="submit">Rate Resume</button>
   </form>
@@ -110,8 +114,12 @@
     <label>Job Description (.txt):</label>
     <input type="file" id="batchJd" name="jd" accept=".txt" required><br><br>
 
-    <label>Prompt (.txt):</label>
-    <input type="file" id="batchPrompt" name="prompt" accept=".txt" required><br><br>
+    <label>Scoring mode:</label>
+    <select id="batchMode" name="mode">
+      <option value="strict">Strict</option>
+      <option value="standard" selected>Standard</option>
+      <option value="lenient">Lenient</option>
+    </select><br><br>
 
     <button type="submit">Rank All Resumes</button>
   </form>

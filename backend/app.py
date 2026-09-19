@@ -20,14 +20,27 @@ app.add_middleware(
 async def evaluate(
     resume: UploadFile = File(...),
     jd: UploadFile = File(...),
-    prompt: UploadFile = File(...),
+    mode: str = Form("standard"),
     session_id: str = Form("default")
 ):
     resume_bytes = await resume.read()
-    jd_text = (await jd.read()).decode("utf-8")
-    prompt_text = (await prompt.read()).decode("utf-8")
 
-    score, reason = get_resume_score(resume_bytes, jd_text, prompt_text, session_id)
+    try:
+        jd_text = (await jd.read()).decode("utf-8")
+    except UnicodeDecodeError:
+        return JSONResponse(
+            status_code=400,
+            content={"score": -1, "reason": "Job description file must be UTF-8 encoded plain text."}
+        )
+
+    try:
+        score, reason = get_resume_score(resume_bytes, jd_text, mode, session_id)
+    except Exception as e:
+        return JSONResponse(
+            status_code=400,
+            content={"score": -1, "reason": f"Error processing this resume: {e}"}
+        )
+
     return JSONResponse(content={"score": score, "reason": reason})
 
 @app.post("/chat")
@@ -39,17 +52,22 @@ async def chat(user_input: str = Form(...), session_id: str = Form("default")):
 async def batch_evaluate(
     resumes: List[UploadFile] = File(...),
     jd: UploadFile = File(...),
-    prompt: UploadFile = File(...),
+    mode: str = Form("standard"),
 ):
-    jd_text = (await jd.read()).decode("utf-8")
-    prompt_text = (await prompt.read()).decode("utf-8")
+    try:
+        jd_text = (await jd.read()).decode("utf-8")
+    except UnicodeDecodeError:
+        return JSONResponse(
+            status_code=400,
+            content={"results": [], "error": "Job description file must be UTF-8 encoded plain text."}
+        )
 
     results = []
     for resume in resumes:
         resume_bytes = await resume.read()
         session_id = f"batch_{resume.filename}"
         try:
-            score, reason = get_resume_score(resume_bytes, jd_text, prompt_text, session_id)
+            score, reason = get_resume_score(resume_bytes, jd_text, mode, session_id)
         except Exception as e:
             score, reason = -1, f"Error processing this resume: {str(e)}"
         results.append({

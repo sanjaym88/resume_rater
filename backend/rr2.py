@@ -9,6 +9,18 @@ import tempfile
 import time
 import json
 import re
+import os
+import sys
+
+# Windows consoles default to a codepage (e.g. cp1252) that can't encode a lot
+# of the punctuation LLMs like to use (em dashes, non-breaking hyphens, curly
+# quotes). Without this, printing that output crashes the request instead of
+# just logging it.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
 
 client = Groq()
 message_store = {}
@@ -23,26 +35,102 @@ def log(*args):
         print(*args)
 
 
+# The prompt is pinned server-side (not user-uploadable) so scores stay
+# comparable across requests. Only the calibration clause changes per mode —
+# everything else (rubric, evidence rules, JSON schema) stays identical.
+PROMPT_TEMPLATE = """You are an AI-powered applicant tracking system (ATS) similar to modern semantic screening tools used by companies like Workday and LinkedIn. Unlike a legacy keyword-only ATS, you understand context: you can recognize when a candidate demonstrates a required skill through related, described work, even if they don't use the exact keyword from the job description. However, you do not give credit for skills that are not genuinely evidenced anywhere in the resume — inference must be reasonable and defensible, not generous guessing.
+
+Your task: evaluate this candidate's resume against the job description and produce a score from 0 to 10.
+
+Job Description:
+{jd}
+
+Candidate Resume:
+{resume}
+
+Follow this process:
+
+STEP 1 — Extract requirements: Identify the core technical requirements, tools, and qualifications the JD is actually asking for. Distinguish "must-have" requirements from "nice-to-have" ones if the JD implies a difference.
+
+STEP 2 — Match with context, not just keywords: For each requirement, examine the FULL resume (summary, experience, and projects together, not just the skills list) and determine if the candidate demonstrates it — either explicitly (the exact tool/skill is named) or through clearly described equivalent work (e.g., "built a REST API with FastAPI" reasonably demonstrates "API development experience" even if the JD's exact phrase isn't used). Do not credit vague or unrelated experience as a match — the connection must be genuine and specific, not a stretch.
+
+STEP 3 — Weigh must-haves heavily: A resume missing multiple core, must-have requirements should score low even if it has strong nice-to-haves. A resume meeting most must-haves through clear, specific evidence should score well even with some gaps in nice-to-haves.
+
+STEP 4 — Calibration for this evaluation: <<HARSHNESS_CLAUSE>>
+
+STEP 5 — Assign the score using this rubric:
+0–2: Little to no evidence of the core requirements, even considering context.
+3–4: Some foundational or adjacent experience, but missing most core requirements.
+5–6: Meets several core requirements with reasonable evidence, but has clear, specific gaps in others.
+7–8: Meets most core requirements with specific, credible evidence from real projects or roles.
+9–10: Strong, well-evidenced match across nearly all core requirements, with depth (not just breadth) demonstrated.
+
+Respond with ONLY a valid JSON object, no other text before or after it, in exactly this shape:
+{{
+  "reasoning": "<2-4 sentences walking through which core requirements were met with evidence, which were reasonably inferred from related work, and which are genuinely missing>",
+  "score": <integer 0-10>,
+  "summary": "<one or two sentence overall verdict>",
+  "strengths": ["<short strength 1>", "<short strength 2>"],
+  "gaps": ["<short gap 1>", "<short gap 2>"]
+}}
+
+Do not include markdown code fences or any text outside the JSON object.
+"""
+
+HARSHNESS_CLAUSES = {
+    "strict": (
+        "Be unforgiving about gaps. Only explicit, project-tied evidence counts — do not "
+        "stretch adjacent or transferable experience into a match. If the candidate is "
+        "missing more than one must-have requirement, the score should not exceed 4, "
+        "regardless of how strong their nice-to-have skills are."
+    ),
+    "standard": (
+        "Be fair and evidence-based: give credit for genuine, specific, described work that "
+        "reasonably demonstrates a requirement even if the exact tool/keyword differs, but do "
+        "not credit vague or unrelated experience as a match."
+    ),
+    "lenient": (
+        "Give the candidate reasonable benefit of the doubt on transferable and adjacent "
+        "skills — strong fundamentals (e.g. programming, APIs, relevant tooling) that suggest "
+        "the candidate could quickly pick up a missing requirement should still count "
+        "meaningfully toward the score, even without an exact keyword match."
+    ),
+}
+
+DEFAULT_MODE = "standard"
+
+
+def build_prompt(mode):
+    clause = HARSHNESS_CLAUSES.get(mode, HARSHNESS_CLAUSES[DEFAULT_MODE])
+    return PROMPT_TEMPLATE.replace("<<HARSHNESS_CLAUSE>>", clause)
+
+
 def call_groq_with_retry(messages, max_retries=2):
     """Calls Groq's chat completion with streaming, retrying if the reply comes back empty."""
     for attempt in range(1, max_retries + 2):
         reply = ""
         finish_reason = "unknown"
 
-        completion = client.chat.completions.create(
-            model="openai/gpt-oss-20b",
-            messages=messages,
-            temperature=0,
-            max_tokens=2048,
-            stream=True,
-        )
+        try:
+            completion = client.chat.completions.create(
+                model="openai/gpt-oss-20b",
+                messages=messages,
+                temperature=0,
+                max_tokens=2048,
+                stream=True,
+            )
 
-        for chunk in completion:
-            delta = chunk.choices[0].delta.content
-            if delta:
-                reply += delta
-            if chunk.choices[0].finish_reason:
-                finish_reason = chunk.choices[0].finish_reason
+            for chunk in completion:
+                delta = chunk.choices[0].delta.content
+                if delta:
+                    reply += delta
+                if chunk.choices[0].finish_reason:
+                    finish_reason = chunk.choices[0].finish_reason
+        except Exception as e:
+            log(f"[retry] API call raised on attempt {attempt}: {e}")
+            if attempt <= max_retries:
+                time.sleep(1)
+            continue
 
         if reply.strip() and finish_reason != "length":
             if attempt > 1:
@@ -99,19 +187,27 @@ def parse_score_json(reply):
         return score, reply
 
 
-def get_resume_score(resume_bytes, jd_text, prompt_text, session_id="default"):
+def get_resume_score(resume_bytes, jd_text, mode=DEFAULT_MODE, session_id="default"):
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_pdf:
         temp_pdf.write(resume_bytes)
         temp_pdf_path = temp_pdf.name
 
-    loader = PyMuPDFLoader(temp_pdf_path)
-    documents = loader.load()
-    resume_text = "\n".join(doc.page_content for doc in documents)
+    try:
+        loader = PyMuPDFLoader(temp_pdf_path)
+        documents = loader.load()
+        resume_text = "\n".join(doc.page_content for doc in documents)
+    finally:
+        try:
+            os.unlink(temp_pdf_path)
+        except OSError as e:
+            # Best-effort cleanup — a failed unlink (e.g. the loader still
+            # holding the file open) should never mask the real error above.
+            log(f"[cleanup] Could not delete temp file {temp_pdf_path}: {e}")
 
     log(f"[extract] Resume length: {len(resume_text)} chars")
     log(f"[extract] Preview: {resume_text[:200]}...")
 
-    prompt_template = PromptTemplate.from_template(prompt_text)
+    prompt_template = PromptTemplate.from_template(build_prompt(mode))
     formatted_prompt = prompt_template.format(jd=jd_text, resume=resume_text)
 
     messages = [{"role": "user", "content": formatted_prompt}]
